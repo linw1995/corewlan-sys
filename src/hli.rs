@@ -1,49 +1,71 @@
 #![allow(non_snake_case)]
 
-use crate::raw::{ICWWiFiClient, INSString, ICWInterface, INSArray, NSString, INSError, INSSet, ICWNetwork, ICWChannel};
+use crate::raw::{
+    ICWChannel, ICWInterface, ICWNetwork, ICWWiFiClient, INSArray, INSError, INSSet, INSString,
+    NSString,
+};
 
 /// "A wrapper around the entire Wi-Fi subsystem that you use to access interfaces and set up event
 /// notifications."
 pub struct CWWiFiClient {
-    raw: crate::raw::CWWiFiClient
+    raw: crate::raw::CWWiFiClient,
 }
 
 impl CWWiFiClient {
     /// "The shared Wi-Fi client object."
     pub fn sharedWiFiClient() -> CWWiFiClient {
-        unsafe { CWWiFiClient { raw: crate::raw::CWWiFiClient::sharedWiFiClient() } }
+        unsafe {
+            CWWiFiClient {
+                raw: crate::raw::CWWiFiClient::sharedWiFiClient(),
+            }
+        }
     }
     /// "Initializes a Wi-Fi client object."
     /// You probably want to use [CWWiFiClient::sharedWiFiClient].
     pub fn init() -> CWWiFiClient {
         unsafe {
             CWWiFiClient {
-                raw: crate::raw::CWWiFiClient(
-                    crate::raw::CWWiFiClient::init(
-                        &crate::raw::CWWiFiClient::alloc()
-                    )
-                )
+                raw: crate::raw::CWWiFiClient(crate::raw::CWWiFiClient::init(
+                    &crate::raw::CWWiFiClient::alloc(),
+                )),
             }
         }
     }
     /// "Returns the default Wi-Fi interface."
     pub fn interface(&self) -> CWInterface {
-        unsafe { CWInterface { raw: self.raw.interface() } }
+        unsafe {
+            CWInterface {
+                raw: self.raw.interface(),
+            }
+        }
     }
     /// "Returns the Wi-Fi interface with the given name."
     /// TODO: Test what happens when an invalid interface name is passed.
     pub fn interface_with_name(&self, name: &str) -> CWInterface {
         let out_name = &format!("{}\0", name);
-        unsafe { CWInterface { raw: self.raw.interfaceWithName_(crate::raw::NSString(crate::raw::NSString::stringWithUTF8String(out_name.as_bytes()))) } }
+        unsafe {
+            CWInterface {
+                raw: self.raw.interfaceWithName_(crate::raw::NSString(
+                    crate::raw::NSString::stringWithUTF8String(out_name.as_bytes()),
+                )),
+            }
+        }
     }
     /// "Returns all available Wi-Fi interfaces."
     pub fn interfaces(&self) -> Vec<CWInterface> {
         let mut final_interfaces = vec![];
         unsafe {
             let interfaces = self.raw.interfaces();
-            let arr_len = <crate::raw::NSArray as INSArray<crate::raw::CWInterface>>::count(&interfaces);
+            let arr_len =
+                <crate::raw::NSArray as INSArray<crate::raw::CWInterface>>::count(&interfaces);
             for i in 0..arr_len {
-                final_interfaces.push(CWInterface { raw: crate::raw::CWInterface(<crate::raw::NSArray as INSArray<crate::raw::CWInterface>>::objectAtIndex_(&interfaces, i)) } );
+                final_interfaces.push(CWInterface {
+                    raw: crate::raw::CWInterface(<crate::raw::NSArray as INSArray<
+                        crate::raw::CWInterface,
+                    >>::objectAtIndex_(
+                        &interfaces, i
+                    )),
+                });
             }
         }
         return final_interfaces;
@@ -53,9 +75,14 @@ impl CWWiFiClient {
         let mut final_interface_names = vec![];
         unsafe {
             let interface_names = crate::raw::CWWiFiClient::interfaceNames();
-            let arr_len = <crate::raw::NSArray as INSArray<crate::raw::NSString>>::count(&interface_names);
+            let arr_len =
+                <crate::raw::NSArray as INSArray<crate::raw::NSString>>::count(&interface_names);
             for i in 0..arr_len {
-                let nsstring = crate::raw::NSString(<crate::raw::NSArray as INSArray<crate::raw::NSString>>::objectAtIndex_(&interface_names, i));
+                let nsstring = crate::raw::NSString(<crate::raw::NSArray as INSArray<
+                    crate::raw::NSString,
+                >>::objectAtIndex_(
+                    &interface_names, i
+                ));
                 let cstring = std::ffi::CStr::from_ptr(nsstring.UTF8String());
                 let new_utf8 = cstring.to_str().unwrap();
                 let safe_utf8 = String::from(new_utf8);
@@ -68,34 +95,63 @@ impl CWWiFiClient {
 
 /// "Encapsulates an IEEE 802.11 interface."
 pub struct CWInterface {
-    raw: crate::raw::CWInterface
+    raw: crate::raw::CWInterface,
 }
 
 impl CWInterface {
+    /// The current service set identifier (SSID) for the interface.
+    pub fn ssid(&self) -> Option<String> {
+        unsafe {
+            let nsstring = self.raw.ssid();
+            // get a pointer to our theoretical string
+            let raw_val = &nsstring as *const NSString;
+            // convert it to a pointer to a u8 (this is the danger)
+            let to_u8 = raw_val as *const u8;
+            // check if the value stored there = 0
+            if to_u8.as_ref().unwrap() == &0 {
+                // then there's not a string!
+                return None;
+            }
+            let cstring = std::ffi::CStr::from_ptr(nsstring.UTF8String());
+            let new_utf8 = cstring.to_str().unwrap();
+            Some(String::from(new_utf8))
+        }
+    }
+
     /// "Scans for networks."
-    /// 
+    ///
     /// Scanning more than once every 10 seconds leads to an error.
     pub fn scanForNetworksWithName(&self, name: Option<String>) -> Result<Vec<CWNetwork>, ()> {
         let mut final_networks = vec![];
         unsafe {
             if let Some(name) = name {
                 let modified_name = &format!("{}\0", name);
-                let network_name = crate::raw::NSString(crate::raw::NSString::stringWithUTF8String(modified_name.as_bytes()));
+                let network_name = crate::raw::NSString(
+                    crate::raw::NSString::stringWithUTF8String(modified_name.as_bytes()),
+                );
                 let potential_error = &mut crate::raw::NSError::alloc() as *mut crate::raw::NSError;
-                let networks = self.raw.scanForNetworksWithName_error_(network_name, potential_error);
+                let networks = self
+                    .raw
+                    .scanForNetworksWithName_error_(network_name, potential_error);
                 if potential_error.as_ref().unwrap().code() != 0 {
                     // TODO: proper error codes!
                     println!("ERROR CODE #{}", potential_error.as_ref().unwrap().code());
                     return Err(());
                 }
-                let networks_nsarr = <crate::raw::NSSet as INSSet<crate::raw::CWNetwork>>::allObjects(&networks);
-                let arr_len = <crate::raw::NSArray as INSArray<crate::raw::CWNetwork>>::count(&networks_nsarr);
+                let networks_nsarr =
+                    <crate::raw::NSSet as INSSet<crate::raw::CWNetwork>>::allObjects(&networks);
+                let arr_len = <crate::raw::NSArray as INSArray<crate::raw::CWNetwork>>::count(
+                    &networks_nsarr,
+                );
                 for i in 0..arr_len {
-                    let instance = crate::raw::CWNetwork(<crate::raw::NSArray as INSArray<crate::raw::CWNetwork>>::objectAtIndex_(&networks_nsarr, i));
+                    let instance = crate::raw::CWNetwork(<crate::raw::NSArray as INSArray<
+                        crate::raw::CWNetwork,
+                    >>::objectAtIndex_(
+                        &networks_nsarr, i
+                    ));
                     final_networks.push(CWNetwork { raw: instance });
                 }
-            }
-            else {
+            } else {
                 let potential_error = &mut crate::raw::NSError::alloc() as *mut crate::raw::NSError;
                 let networks = self.raw.scanForNetworks_error_(potential_error);
                 if potential_error.as_ref().unwrap().code() != 0 {
@@ -103,10 +159,17 @@ impl CWInterface {
                     println!("ERROR CODE #{}", potential_error.as_ref().unwrap().code());
                     return Err(());
                 }
-                let networks_nsarr = <crate::raw::NSSet as INSSet<crate::raw::CWNetwork>>::allObjects(&networks);
-                let arr_len = <crate::raw::NSArray as INSArray<crate::raw::CWNetwork>>::count(&networks_nsarr);
+                let networks_nsarr =
+                    <crate::raw::NSSet as INSSet<crate::raw::CWNetwork>>::allObjects(&networks);
+                let arr_len = <crate::raw::NSArray as INSArray<crate::raw::CWNetwork>>::count(
+                    &networks_nsarr,
+                );
                 for i in 0..arr_len {
-                    let instance = crate::raw::CWNetwork(<crate::raw::NSArray as INSArray<crate::raw::CWNetwork>>::objectAtIndex_(&networks_nsarr, i));
+                    let instance = crate::raw::CWNetwork(<crate::raw::NSArray as INSArray<
+                        crate::raw::CWNetwork,
+                    >>::objectAtIndex_(
+                        &networks_nsarr, i
+                    ));
                     final_networks.push(CWNetwork { raw: instance });
                 }
             }
@@ -122,33 +185,39 @@ impl CWInterface {
 /// "Encapsulates an IEEE 802.11 network, providing read-only accessors to various properties of the
 /// network."
 pub struct CWNetwork {
-    raw: crate::raw::CWNetwork
+    raw: crate::raw::CWNetwork,
 }
 
 impl CWNetwork {
     /// "Method for determining which security types a network supports."
     pub fn supportsSecurity(&self, security: CWSecurity) -> bool {
-        unsafe { return self.raw.supportsSecurity_(security as i64); }
+        unsafe {
+            return self.raw.supportsSecurity_(security as i64);
+        }
     }
     /// "Method for determining which PHY modes a network supports."
     pub fn supportsPHYMode(&self, mode: CWPHYMode) -> bool {
-        unsafe { return self.raw.supportsPHYMode_(mode as i64); }
+        unsafe {
+            return self.raw.supportsPHYMode_(mode as i64);
+        }
     }
     /// "The beacon interval (ms) for the network."
     pub fn beaconInterval(&self) -> i64 {
-        unsafe { return self.raw.beaconInterval(); }
+        unsafe {
+            return self.raw.beaconInterval();
+        }
     }
     /// "The basic service set identifier (BSSID) for the network."
-    /// 
+    ///
     /// This value is not typically returned. Getting it to work is finicky. Try googling 'bssid
     /// CoreWLAN macOS' and pray.
-    /// 
+    ///
     /// Further notes:
-    /// 
+    ///
     /// Afaik if the following are true this should return a valid value:
     /// - CoreLocation::CLLocationManager::requestAlwaysAuthorization()
     /// - Executable is signed
-    /// 
+    ///
     /// I've been unable to test/reproduce this.
     pub fn bssid(&self) -> Option<String> {
         unsafe {
@@ -172,7 +241,7 @@ impl CWNetwork {
         }
     }
     /// "The country code (ISO/IEC 3166-1:1997) for the network."
-    /// 
+    ///
     /// Requesting this information also requires location services permissions. See
     /// [CWNetwork::bssid] for how you might get this information.
     pub fn countryCode(&self) -> Option<String> {
@@ -196,19 +265,25 @@ impl CWNetwork {
         }
     }
     /// "The network is an IBSS network."
-    /// 
+    ///
     /// IBSS networks are essentially peer-to-peer networks.
     pub fn ibss(&self) -> bool {
-        unsafe { return self.raw.ibss(); }
+        unsafe {
+            return self.raw.ibss();
+        }
     }
     /// "The aggregate noise measurement (dBm) for the network."
     pub fn noiseMeasurement(&self) -> i64 {
-        unsafe { return self.raw.noiseMeasurement(); }
+        unsafe {
+            return self.raw.noiseMeasurement();
+        }
     }
     /// "The aggregate received signal strength indication (RSSI) measurement (dBm) for the
     /// network."
     pub fn rssiValue(&self) -> i64 {
-        unsafe { return self.raw.rssiValue(); }
+        unsafe {
+            return self.raw.rssiValue();
+        }
     }
     /// "The service set identifier (SSID) for the network."
     pub fn ssid(&self) -> String {
@@ -232,9 +307,12 @@ impl CWNetwork {
             width = CWChannelWidth::try_from_i64(raw_channel.channelWidth()).unwrap();
             band = CWChannelBand::try_from_i64(raw_channel.channelBand()).unwrap();
         }
-        return CWChannel { number, width, band };
+        return CWChannel {
+            number,
+            width,
+            band,
+        };
     }
-
 }
 
 #[repr(i64)]
@@ -326,7 +404,7 @@ impl CWChannelWidth {
             x if x == Self::W40MHz as i64 => Some(Self::W40MHz),
             x if x == Self::W80MHz as i64 => Some(Self::W80MHz),
             x if x == Self::W160MHz as i64 => Some(Self::W160MHz),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -349,7 +427,7 @@ impl CWChannelBand {
             x if x == Self::Unknown as i64 => Some(Self::Unknown),
             x if x == Self::B2GHz as i64 => Some(Self::B2GHz),
             x if x == Self::B5GHz as i64 => Some(Self::B5GHz),
-            _ => None
+            _ => None,
         }
     }
 }

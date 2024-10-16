@@ -1,5 +1,5 @@
-use std::hint::black_box;
 use crate::*;
+use std::hint::black_box;
 
 #[test]
 fn initialize_shared_client() {
@@ -17,6 +17,7 @@ fn initialize_client() {
 fn get_default_interface() {
     let client = CWWiFiClient::sharedWiFiClient();
     let interface = client.interface();
+    black_box(interface.ssid());
     black_box(interface);
 }
 
@@ -31,6 +32,9 @@ fn get_named_interface() {
 fn get_all_interfaces() {
     let client = CWWiFiClient::sharedWiFiClient();
     let interfaces = client.interfaces();
+    interfaces.iter().for_each(|interface| {
+        black_box(interface.ssid());
+    });
     black_box(interfaces);
 }
 

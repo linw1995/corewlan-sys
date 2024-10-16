@@ -286,14 +286,21 @@ impl CWNetwork {
         }
     }
     /// "The service set identifier (SSID) for the network."
-    pub fn ssid(&self) -> String {
+    pub fn ssid(&self) -> Option<String> {
         unsafe {
             let nsstring = self.raw.ssid();
+            // get a pointer to our theoretical string
+            let raw_val = &nsstring as *const NSString;
+            // convert it to a pointer to a u8 (this is the danger)
+            let to_u8 = raw_val as *const u8;
+            // check if the value stored there = 0
+            if to_u8.as_ref().unwrap() == &0 {
+                // then there's not a string!
+                return None;
+            }
             let cstring = std::ffi::CStr::from_ptr(nsstring.UTF8String());
             let new_utf8 = cstring.to_str().unwrap();
-            // SAFTEY: There is no promise on the lifetime of the returned NSString, so we create a
-            // new string using the data while we know it's good.
-            return String::from(new_utf8);
+            Some(String::from(new_utf8))
         }
     }
     /// "The channel for the network."
